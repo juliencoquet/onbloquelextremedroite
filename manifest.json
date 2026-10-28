@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "On bloque l'extrême droite",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bloquez l'extrême droite sur X et Instagram : le profil affiché, ou une liste de pseudos saisie ou importée.",
   "permissions": [
     "storage"
