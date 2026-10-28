@@ -3,14 +3,43 @@
   "name": "On bloque l'extrême droite",
   "version": "0.1.0",
   "description": "Importe une liste de comptes et les bloque depuis votre session connectée.",
-  "permissions": ["storage", "activeTab"],
-  "host_permissions": ["https://x.com/*", "https://twitter.com/*", "https://www.instagram.com/*"],
-  "action": { "default_popup": "popup.html" },
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://www.instagram.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
   "content_scripts": [
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*", "https://www.instagram.com/*"],
-      "js": ["platforms/x.js", "platforms/instagram.js", "content.js"],
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://www.instagram.com/*"
+      ],
+      "js": [
+        "platforms/x.js",
+        "platforms/instagram.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }

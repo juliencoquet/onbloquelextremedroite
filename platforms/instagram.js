@@ -26,8 +26,18 @@
     const html = onPage
       ? document.documentElement.innerHTML
       : await (await tfetch("https://www.instagram.com/" + encodeURIComponent(handle) + "/", { credentials: "include" })).text();
-    const m = html.match(/"profile_id":"(\d+)"/) || html.match(/"page_id":"profilePage_(\d+)"/);
-    return m ? m[1] : null;
+    return idBoundToHandle(html, handle);
+  }
+
+  // Accept an id only if the requested username appears right beside it; a bare first
+  // match could be another account (suggestions, mentions) and we'd block the wrong person.
+  function idBoundToHandle(html, handle) {
+    const needle = '"username":"' + handle.toLowerCase() + '"';
+    for (const m of html.matchAll(/"profile_id":"(\d+)"/g)) {
+      const near = html.slice(Math.max(0, m.index - 800), m.index + 800).toLowerCase();
+      if (near.includes(needle)) return m[1];
+    }
+    return null;
   }
 
   const RESERVED = new Set(["explore", "reels", "reel", "p", "direct", "accounts", "stories", "about", "legal", "web", "tv", "challenge"]);
@@ -56,7 +66,9 @@
         if (info.status === 401 || info.status === 403) {
           return { ok: false, status: info.status, fatal: "Session refusée (" + info.status + ")." };
         }
-        id = (await info.json()).data.user.id;
+        const user = (await info.json()).data.user;
+        if (user.username.toLowerCase() !== handle.toLowerCase()) return { ok: false, status: 0 };
+        id = user.id;
       }
     } catch (e) {
       if (e.name === "TimeoutError") throw e;
@@ -88,5 +100,5 @@
   // Much slower than X: 8–16 s between blocks.
   const delay = () => 8000 + Math.random() * 8000;
 
-  (globalThis.__blockPlatforms ||= {}).instagram = { id: "instagram", block, delay, currentHandle };
+  (globalThis.__blockPlatforms ||= {}).instagram = { id: "instagram", block, delay, currentHandle, idBoundToHandle };
 })();

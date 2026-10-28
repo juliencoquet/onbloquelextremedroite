@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- hard-edged, no rounding: black slab with a red frame -->
+  <rect width="128" height="128" fill="#0A0A0A"/>
+  <rect x="6" y="6" width="116" height="116" fill="none" stroke="#E1000F" stroke-width="8"/>
+  <!-- blunt right-pointing arrow, sharp corners -->
+  <polygon points="18,48 66,48 66,26 112,64 66,102 66,80 18,80" fill="#F5F5F5"/>
+  <!-- red cut: slashed through, cut-off ends, thick -->
+  <polygon points="22,116 40,116 118,12 100,12" fill="#E1000F" stroke="#0A0A0A" stroke-width="5" paint-order="stroke"/>
+</svg>

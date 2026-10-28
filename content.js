@@ -93,7 +93,7 @@ async function run() {
   }
 
   if (st.status === "running") {
-    st.status = stopRequested ? "stopped" : "finished";
+    st.status = stopRequested ? "Arrêté" : "Terminé";
   }
   await setState(st);
   running = false;
