@@ -1,7 +1,11 @@
 {
-  "accounts": [
+  "instagram": [
     "compte_exemple_1",
     "@compte_exemple_2",
     "https://www.instagram.com/compte_exemple_3/"
+  ],
+  "x": [
+    "exemple_x4",
+    "@exemple_x5"
   ]
 }

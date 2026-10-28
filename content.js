@@ -12,14 +12,35 @@ async function getState() {
 }
 const setState = (s) => chrome.storage.local.set({ [STATE_KEY]: s });
 
+function currentPlatform() {
+  return /instagram\.com$/.test(location.hostname)
+    ? globalThis.__blockPlatforms.instagram
+    : globalThis.__blockPlatforms.x;
+}
+
+async function blockCurrent() {
+  const platform = currentPlatform();
+  const handle = platform.currentHandle();
+  if (!handle) return { ok: false, message: "Aucun profil affiché dans cet onglet." };
+  try {
+    const r = await platform.block(handle);
+    if (r.fatal) return { ok: false, message: r.fatal };
+    if (r.status === 429) return { ok: false, message: "Limite atteinte, réessayez plus tard." };
+    return r.ok
+      ? { ok: true, message: "@" + handle + " bloqué. Rechargez la page (F5) pour voir l'effet." }
+      : { ok: false, message: "Échec pour @" + handle + " (statut " + r.status + ")." };
+  } catch (e) {
+    console.error("[onbloque] blockCurrent failed", e);
+    return { ok: false, message: "Erreur : " + e };
+  }
+}
+
 async function run() {
   if (running) return;
   running = true;
   stopRequested = false;
 
-  const platform = /instagram\.com$/.test(location.hostname)
-    ? globalThis.__blockPlatforms.instagram
-    : globalThis.__blockPlatforms.x;
+  const platform = currentPlatform();
   let st = await getState();
   if (!st) return (running = false);
 
@@ -82,6 +103,9 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
   if (msg.type === "start") {
     run();
     reply({ ok: true });
+  } else if (msg.type === "blockCurrent") {
+    blockCurrent().then(reply);
+    return true; // async reply
   } else if (msg.type === "stop") {
     stopRequested = true;
     reply({ ok: true });

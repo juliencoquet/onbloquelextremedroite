@@ -20,27 +20,47 @@
   const tfetch = (url, opts) =>
     fetch(url, { ...opts, signal: AbortSignal.timeout(20_000) });
 
+  // The profile page embeds the numeric id; reading it is an ordinary page load, not an API call.
+  async function idFromProfilePage(handle) {
+    const onPage = location.pathname.split("/")[1]?.toLowerCase() === handle.toLowerCase();
+    const html = onPage
+      ? document.documentElement.innerHTML
+      : await (await tfetch("https://www.instagram.com/" + encodeURIComponent(handle) + "/", { credentials: "include" })).text();
+    const m = html.match(/"profile_id":"(\d+)"/) || html.match(/"page_id":"profilePage_(\d+)"/);
+    return m ? m[1] : null;
+  }
+
+  const RESERVED = new Set(["explore", "reels", "reel", "p", "direct", "accounts", "stories", "about", "legal", "web", "tv", "challenge"]);
+  function currentHandle() {
+    const seg = location.pathname.split("/")[1];
+    return seg && !RESERVED.has(seg.toLowerCase()) && /^[\w.]{1,30}$/.test(seg) ? seg : null;
+  }
+
   async function block(handle) {
     const token = cookie("csrftoken");
     if (!token || !cookie("ds_user_id")) {
       return { ok: false, status: 401, fatal: "Non connecté à Instagram." };
     }
 
-    // 1. username -> numeric id
-    const info = await tfetch(
-      "https://www.instagram.com/api/v1/users/web_profile_info/?username=" + encodeURIComponent(handle),
-      { credentials: "include", headers: headers(token) }
-    );
-    if (info.status === 404) return { ok: false, status: 404 }; // gone / renamed
-    if (info.status === 429) return { ok: false, status: 429, retryAfterMs: 30 * 60_000 };
-    if (info.status === 401 || info.status === 403) {
-      return { ok: false, status: info.status, fatal: "Session refusée (" + info.status + ")." };
-    }
+    // 1. username -> numeric id (page HTML first, API only as fallback: the API lookup is throttled hard)
     let id;
     try {
-      id = (await info.json()).data.user.id;
-    } catch {
-      return { ok: false, status: info.status };
+      id = await idFromProfilePage(handle);
+      if (!id) {
+        const info = await tfetch(
+          "https://www.instagram.com/api/v1/users/web_profile_info/?username=" + encodeURIComponent(handle),
+          { credentials: "include", headers: headers(token) }
+        );
+        if (info.status === 404) return { ok: false, status: 404 }; // gone / renamed
+        if (info.status === 429) return { ok: false, status: 429, retryAfterMs: 30 * 60_000 };
+        if (info.status === 401 || info.status === 403) {
+          return { ok: false, status: info.status, fatal: "Session refusée (" + info.status + ")." };
+        }
+        id = (await info.json()).data.user.id;
+      }
+    } catch (e) {
+      if (e.name === "TimeoutError") throw e;
+      return { ok: false, status: 0 };
     }
     if (id === cookie("ds_user_id")) return { ok: false, status: 400 }; // never block self
 
@@ -68,5 +88,5 @@
   // Much slower than X: 8–16 s between blocks.
   const delay = () => 8000 + Math.random() * 8000;
 
-  (globalThis.__blockPlatforms ||= {}).instagram = { id: "instagram", block, delay };
+  (globalThis.__blockPlatforms ||= {}).instagram = { id: "instagram", block, delay, currentHandle };
 })();

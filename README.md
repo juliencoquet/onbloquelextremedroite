@@ -8,7 +8,7 @@ depuis votre session X/Twitter ou Instagram déjà connectée.
 
 ## Utiliser
 1. Ouvrez x.com ou instagram.com (connecté) dans l'onglet actif.
-2. Cliquez sur l'icône, collez une liste ou donnez une URL (texte, un pseudo par ligne, ou JSON `["a","b"]`).
+2. Cliquez sur l'icône, collez une liste ou donnez une URL (texte, un pseudo par ligne, ou JSON groupé par réseau `{"instagram": ["a"], "x": ["b"]}` — voir `examples/liste.json` —, ou simple tableau `["a","b"]`).
 3. « Bloquer ». Un blocage toutes les 1,5–4 s (X) ou 8–16 s (Instagram) ; pause automatique sur limite (429).
 
 ## Ajouter une plateforme

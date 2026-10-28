@@ -40,5 +40,11 @@
     return { ok: res.ok, status: res.status };
   }
 
-  (globalThis.__blockPlatforms ||= {}).x = { id: "x", block };
+  const RESERVED = new Set(["home", "explore", "notifications", "messages", "i", "settings", "search", "compose", "tos", "privacy", "login", "logout"]);
+  function currentHandle() {
+    const seg = location.pathname.split("/")[1];
+    return seg && !RESERVED.has(seg.toLowerCase()) && /^\w{1,15}$/.test(seg) ? seg : null;
+  }
+
+  (globalThis.__blockPlatforms ||= {}).x = { id: "x", block, currentHandle };
 })();
