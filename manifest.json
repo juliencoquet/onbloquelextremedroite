@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "On bloque l'extrême droite",
   "version": "0.1.0",
-  "description": "Importe une liste de comptes et les bloque depuis votre session connectée.",
+  "description": "Bloquez l'extrême droite sur les réseaux sociaux. Vous pouvez soit bloquer le profil en cours de visualisation, saisir une liste de pseudos, importer une liste de pseudos.",
   "permissions": [
     "storage",
     "activeTab"

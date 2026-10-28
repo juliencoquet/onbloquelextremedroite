@@ -1,6 +1,7 @@
 // Queue runner. Lives in the x.com tab; progress is mirrored to storage so the
 // popup can show it (and survive being closed).
 const STATE_KEY = "state";
+const RESUME_KEY = "onbloque_resume"; // per-tab flag: this tab is mid-run across page loads
 let running = false;
 let stopRequested = false;
 
@@ -26,6 +27,7 @@ async function blockCurrent() {
     const r = await platform.block(handle);
     if (r.fatal) return { ok: false, message: r.fatal };
     if (r.status === 429) return { ok: false, message: "Limite atteinte, réessayez plus tard." };
+    if (r.already) return { ok: true, message: "@" + handle + " : déjà bloqué." };
     return r.ok
       ? { ok: true, message: "@" + handle + " bloqué. Rechargez la page (F5) pour voir l'effet." }
       : { ok: false, message: "Échec pour @" + handle + " (statut " + r.status + ")." };
@@ -68,6 +70,14 @@ async function run() {
       await setState(st);
     }
 
+    if (r.navigate) {
+      // Adapter needs another page (Instagram profile). Persist, load it; the content script
+      // there picks the run back up (see bottom of file).
+      sessionStorage.setItem(RESUME_KEY, "1");
+      await setState(st);
+      location.assign(r.navigate);
+      return;
+    }
     if (r.fatal) {
       st.status = "error";
       st.message = r.fatal;
@@ -87,7 +97,13 @@ async function run() {
 
     st.errors = 0;
     st.queue.shift();
-    (r.ok ? st.done : st.failed).push(handle);
+    if (r.already) {
+      (st.already ||= []).push(handle);
+      st.message = "@" + handle + " : déjà bloqué";
+    } else {
+      (r.ok ? st.done : st.failed).push(handle);
+      st.message = "";
+    }
     await setState(st);
     await sleep((platform.delay || defaultDelay)());
   }
@@ -96,6 +112,7 @@ async function run() {
     st.status = stopRequested ? "Arrêté" : "Terminé";
   }
   await setState(st);
+  sessionStorage.removeItem(RESUME_KEY);
   running = false;
 }
 
@@ -111,3 +128,11 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
     reply({ ok: true });
   }
 });
+
+// Continue a run that was interrupted by a page load we triggered ourselves.
+if (sessionStorage.getItem(RESUME_KEY)) {
+  getState().then((st) => {
+    if (st && st.queue.length && st.network === currentPlatform().id) run();
+    else sessionStorage.removeItem(RESUME_KEY);
+  });
+}

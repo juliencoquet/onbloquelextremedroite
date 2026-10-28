@@ -15,6 +15,6 @@ depuis votre session X/Twitter ou Instagram déjà connectée.
 Créer `platforms/<nom>.js` exposant `block(handle)` (voir `platforms/x.js`) et l'ajouter au manifest.
 
 ## Notes
-- Instagram est très strict : si une vérification est demandée, l'exécution s'arrête. Préférez de petites listes.
+- Instagram : l'extension navigue de profil en profil et clique « … » → Bloquer → confirmer, comme vous le feriez. Laissez l'onglet ouvert et au premier plan ; la page change à chaque compte. Si Instagram affiche « réessayez plus tard », l'exécution s'arrête.
 - Utilise l'endpoint web interne de X (`blocks/create.json`) : non officiel, peut changer ; l'automatisation peut contrevenir aux CGU.
-- Garder l'onglet x.com ouvert pendant l'exécution. L'état est conservé : relancer ignore les comptes déjà bloqués.
+- Garder l'onglet x.com ouvert pendant l'exécution. Après un arrêt en cours de route, relancer la même liste reprend là où elle s'était arrêtée ; une liste terminée est oubliée.

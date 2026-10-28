@@ -1,44 +1,60 @@
-// Adapter for Instagram web. Runs on instagram.com so requests are same-origin
-// and carry the user's session cookies. Instagram is strict: slow pace, and any
-// sign of a challenge stops the run.
+// Adapter for Instagram web. Instead of calling Instagram's internal API directly (which got
+// throttled with 429s), it drives the page like a person would: open the profile, "..." menu,
+// Block, confirm. The site's own code then sends the requests with its own tokens.
+//
+// A profile that isn't open yet is reached by returning { navigate: url }: content.js stores
+// a resume flag, loads the URL, and the content script on the new page carries on.
 (function () {
-  const IG_APP_ID = "936619743392459"; // public web-client app id
+  const NAV_KEY = "onbloque_nav";
 
-  function cookie(name) {
-    const m = document.cookie.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]+)"));
-    return m ? m[1] : null;
-  }
+  // Button / aria-label wording by UI language (en, fr, es, de, it, pt).
+  const OPTIONS = ["options", "opciones", "optionen", "opzioni", "opções", "opcoes"];
+  const BLOCK = ["block", "bloquer", "bloquear", "blockieren", "blocca"];
+  const UNBLOCK = ["unblock", "débloquer", "debloquer", "desbloquear", "entsperren", "sblocca"];
+  const CANCEL = ["cancel", "annuler", "cancelar", "abbrechen", "annulla"];
+  // Acknowledgement buttons on the dialog Instagram may show after a block.
+  const DISMISS = [
+    "dismiss", "ok", "close", "got it", "fermer", "ignorer", "rejeter", "compris", "cerrar",
+    "entendido", "schließen", "schliessen", "chiudi", "fechar",
+  ];
+  const THROTTLED = [
+    "try again later", "action blocked", "réessayer plus tard", "action bloquée",
+    "vuelve a intentarlo más tarde", "später erneut versuchen",
+  ];
 
-  const headers = (token) => ({
-    "x-csrftoken": token,
-    "x-ig-app-id": IG_APP_ID,
-    "x-requested-with": "XMLHttpRequest",
-    "x-asbd-id": "129477",
-  });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const pause = () => sleep(400 + Math.random() * 500);
+  const norm = (t) => (t || "").trim().toLowerCase().replace(/\s+/g, " ");
 
-  // fetch with a timeout so a stalled request can't freeze the queue.
-  const tfetch = (url, opts) =>
-    fetch(url, { ...opts, signal: AbortSignal.timeout(20_000) });
-
-  // The profile page embeds the numeric id; reading it is an ordinary page load, not an API call.
-  async function idFromProfilePage(handle) {
-    const onPage = location.pathname.split("/")[1]?.toLowerCase() === handle.toLowerCase();
-    const html = onPage
-      ? document.documentElement.innerHTML
-      : await (await tfetch("https://www.instagram.com/" + encodeURIComponent(handle) + "/", { credentials: "include" })).text();
-    return idBoundToHandle(html, handle);
-  }
-
-  // Accept an id only if the requested username appears right beside it; a bare first
-  // match could be another account (suggestions, mentions) and we'd block the wrong person.
-  function idBoundToHandle(html, handle) {
-    const needle = '"username":"' + handle.toLowerCase() + '"';
-    for (const m of html.matchAll(/"profile_id":"(\d+)"/g)) {
-      const near = html.slice(Math.max(0, m.index - 800), m.index + 800).toLowerCase();
-      if (near.includes(needle)) return m[1];
+  async function waitFor(fn, timeout = 10_000) {
+    const end = Date.now() + timeout;
+    while (Date.now() < end) {
+      const v = fn();
+      if (v) return v;
+      await sleep(250);
     }
     return null;
   }
+
+  const buttons = (root) => [...root.querySelectorAll('button, [role="button"]')];
+  const hasWord = (b, words, handle) => {
+    const t = norm(b.textContent);
+    return words.includes(t) || (handle && words.some((w) => t === w + " " + handle || t === w + " @" + handle));
+  };
+
+  function optionsButton() {
+    for (const svg of document.querySelectorAll("header svg[aria-label]")) {
+      if (OPTIONS.includes(norm(svg.getAttribute("aria-label")))) {
+        return svg.closest('button, [role="button"]') || svg.parentElement;
+      }
+    }
+    return null;
+  }
+
+  const unblockButton = () => buttons(document).find((b) => UNBLOCK.includes(norm(b.textContent)));
+
+  const dialogs = () => [...document.querySelectorAll('[role="dialog"]')];
+  const throttled = () => dialogs().some((d) => THROTTLED.some((w) => norm(d.textContent).includes(w)));
 
   const RESERVED = new Set(["explore", "reels", "reel", "p", "direct", "accounts", "stories", "about", "legal", "web", "tv", "challenge"]);
   function currentHandle() {
@@ -46,59 +62,105 @@
     return seg && !RESERVED.has(seg.toLowerCase()) && /^[\w.]{1,30}$/.test(seg) ? seg : null;
   }
 
+  // Click a post-block acknowledgement ("Dismiss", "OK", ...) if one is showing.
+  // Dialogs that still offer Block/Unblock/Cancel are left alone.
+  function dismissDialog() {
+    for (const d of dialogs()) {
+      const bs = buttons(d);
+      if (bs.some((b) => hasWord(b, [...BLOCK, ...UNBLOCK, ...CANCEL]))) continue;
+      const ok = bs.find((b) => DISMISS.includes(norm(b.textContent)));
+      if (ok) {
+        ok.click();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Dismiss an open menu without choosing anything.
+  async function closeMenu() {
+    const cancel = dialogs().flatMap(buttons).find((b) => CANCEL.includes(norm(b.textContent)));
+    if (cancel) cancel.click();
+    else document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await pause();
+  }
+
   async function block(handle) {
-    const token = cookie("csrftoken");
-    if (!token || !cookie("ds_user_id")) {
+    if (!document.cookie.includes("ds_user_id=")) {
       return { ok: false, status: 401, fatal: "Non connecté à Instagram." };
     }
 
-    // 1. username -> numeric id (page HTML first, API only as fallback: the API lookup is throttled hard)
-    let id;
-    try {
-      id = await idFromProfilePage(handle);
-      if (!id) {
-        const info = await tfetch(
-          "https://www.instagram.com/api/v1/users/web_profile_info/?username=" + encodeURIComponent(handle),
-          { credentials: "include", headers: headers(token) }
-        );
-        if (info.status === 404) return { ok: false, status: 404 }; // gone / renamed
-        if (info.status === 429) return { ok: false, status: 429, retryAfterMs: 30 * 60_000 };
-        if (info.status === 401 || info.status === 403) {
-          return { ok: false, status: info.status, fatal: "Session refusée (" + info.status + ")." };
-        }
-        const user = (await info.json()).data.user;
-        if (user.username.toLowerCase() !== handle.toLowerCase()) return { ok: false, status: 0 };
-        id = user.id;
+    // Reach the profile first. If we were already sent there and still aren't on it
+    // (renamed, removed, redirected to login), skip rather than loop.
+    if ((currentHandle() || "").toLowerCase() !== handle.toLowerCase()) {
+      if (sessionStorage.getItem(NAV_KEY) === handle) {
+        sessionStorage.removeItem(NAV_KEY);
+        return { ok: false, status: 404 };
       }
-    } catch (e) {
-      if (e.name === "TimeoutError") throw e;
-      return { ok: false, status: 0 };
+      sessionStorage.setItem(NAV_KEY, handle);
+      return { navigate: "https://www.instagram.com/" + encodeURIComponent(handle) + "/" };
     }
-    if (id === cookie("ds_user_id")) return { ok: false, status: 400 }; // never block self
+    sessionStorage.removeItem(NAV_KEY);
 
-    // 2. block
-    const res = await tfetch("https://www.instagram.com/api/v1/web/friendships/" + id + "/block/", {
-      method: "POST",
-      credentials: "include",
-      headers: { ...headers(token), "content-type": "application/x-www-form-urlencoded" },
-      body: "",
-    });
-    if (res.status === 429) return { ok: false, status: 429, retryAfterMs: 30 * 60_000 };
-    if (res.status === 401 || res.status === 403) {
-      return { ok: false, status: res.status, fatal: "Session refusée (" + res.status + ")." };
+    // Wait for the profile to render: either the "..." menu, or an Unblock button (already blocked).
+    const opts = await waitFor(() => optionsButton() || unblockButton(), 15_000);
+    if (!opts) return { ok: false, status: 404 }; // page unavailable / no profile header
+    if (unblockButton()) return { ok: true, status: 200, already: true };
+
+    await pause();
+    opts.click();
+
+    // Menu dialog -> "Block". An already-blocked profile offers "Unblock" here instead:
+    // report that as "already blocked" rather than waiting for a button that won't come.
+    const menuButtons = () => dialogs().flatMap(buttons);
+    const menuChoice = await waitFor(
+      () =>
+        menuButtons().find((b) => hasWord(b, BLOCK, handle.toLowerCase())) ||
+        menuButtons().find((b) => hasWord(b, UNBLOCK, handle.toLowerCase())),
+      8_000
+    );
+    if (!menuChoice) return { ok: false, status: 0 };
+    if (hasWord(menuChoice, UNBLOCK, handle.toLowerCase())) {
+      await closeMenu();
+      return { ok: true, status: 200, already: true };
     }
-    if (!res.ok) {
-      // 400 with feedback_required / challenge_required = Instagram flagged the activity.
-      const body = await res.text();
-      if (/feedback_required|challenge_required|checkpoint/.test(body)) {
-        return { ok: false, status: res.status, fatal: "Instagram a demandé une vérification : arrêt. Réessayez plus tard." };
-      }
+    await pause();
+    menuChoice.click();
+
+    // Confirmation dialog ("Block <handle>?") -> "Block". It mentions the handle, which tells it
+    // apart from the menu it replaces.
+    const confirm = await waitFor(() => {
+      if (throttled()) return "throttled";
+      return dialogs()
+        .filter((d) => norm(d.textContent).includes(handle.toLowerCase()))
+        .flatMap(buttons)
+        .find((b) => hasWord(b, BLOCK, handle.toLowerCase()));
+    }, 8_000);
+    if (confirm === "throttled") {
+      return { ok: false, status: 429, fatal: "Instagram limite temporairement les actions : arrêt. Réessayez plus tard." };
     }
-    return { ok: res.ok, status: res.status };
+    if (!confirm) return { ok: false, status: 0 };
+    await pause();
+    confirm.click();
+
+    // Success = the profile now offers "Unblock". A "Dismiss"-style dialog may pop up first:
+    // click it away so it doesn't hold the page.
+    const done = await waitFor(() => {
+      if (throttled()) return "throttled";
+      dismissDialog();
+      return unblockButton();
+    }, 10_000);
+    if (done === "throttled") {
+      return { ok: false, status: 429, fatal: "Instagram limite temporairement les actions : arrêt. Réessayez plus tard." };
+    }
+    // Clear any acknowledgement that appeared after the Unblock button did.
+    await sleep(500);
+    for (let i = 0; i < 3 && dismissDialog(); i++) await sleep(500);
+    return done ? { ok: true, status: 200 } : { ok: false, status: 0 };
   }
 
-  // Much slower than X: 8–16 s between blocks.
+  // Page loads and menu clicks are slow anyway; keep a human-ish gap between profiles.
   const delay = () => 8000 + Math.random() * 8000;
 
-  (globalThis.__blockPlatforms ||= {}).instagram = { id: "instagram", block, delay, currentHandle, idBoundToHandle };
+  (globalThis.__blockPlatforms ||= {}).instagram = { id: "instagram", block, delay, currentHandle };
 })();

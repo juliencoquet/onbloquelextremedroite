@@ -45,7 +45,7 @@ async function activeXTab() {
 function render(st) {
   if (!st) return ($("status").textContent = "");
   $("status").textContent =
-    `État : ${st.status}\nBloqués : ${st.done.length} · Échecs : ${st.failed.length} · Restants : ${st.queue.length}` +
+    `État : ${st.status}\nBloqués : ${st.done.length} · Déjà bloqués : ${(st.already || []).length} · Échecs : ${st.failed.length} · Restants : ${st.queue.length}` +
     (st.queue.length && st.status === "running" ? `\nEn cours : @${st.queue[0]}` : "") +
     (st.message ? `\n${st.message}` : "");
 }
