@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Chrome MV3 extension: imports a list of handles (URL or pasted) and blocks them from the user's logged-in X/Twitter session. No build step, no dependencies.
+Chrome MV3 extension: imports a list of handles (URL or pasted) and blocks them from the user's logged-in X/Twitter or Instagram session. No build step, no dependencies.
 
 ## Layout
 - `manifest.json` — MV3; content scripts run on x.com / twitter.com.
@@ -19,7 +19,9 @@ Chrome MV3 extension: imports a list of handles (URL or pasted) and blocks them 
 - Only blocks (never follows, reports or posts). Never log or transmit cookies/tokens.
 
 ## Adding a platform
-New adapter in `platforms/`, add to `content_scripts.js` and `host_permissions` in the manifest, and make `content.js` select the adapter by `location.hostname` (currently hard-coded to `x`).
+New adapter in `platforms/`, add to `content_scripts.js` and `host_permissions` in the manifest, and extend the hostname check in `content.js` that selects the adapter. An adapter may export `delay()` to override the default pacing (Instagram: 8–16 s).
+
+- Instagram: `web_profile_info` (username→id) then `friendships/{id}/block/`, unofficial. A 400 `feedback_required`/`challenge_required` aborts the whole run; never retry past it.
 
 ## Testing
 Load unpacked at `chrome://extensions`, open x.com logged in, run with a test account's handle. `node --check` on JS files for syntax.

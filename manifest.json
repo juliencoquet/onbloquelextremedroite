@@ -4,12 +4,12 @@
   "version": "0.1.0",
   "description": "Importe une liste de comptes et les bloque depuis votre session connectée.",
   "permissions": ["storage", "activeTab"],
-  "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
+  "host_permissions": ["https://x.com/*", "https://twitter.com/*", "https://www.instagram.com/*"],
   "action": { "default_popup": "popup.html" },
   "content_scripts": [
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*"],
-      "js": ["platforms/x.js", "content.js"],
+      "matches": ["https://x.com/*", "https://twitter.com/*", "https://www.instagram.com/*"],
+      "js": ["platforms/x.js", "platforms/instagram.js", "content.js"],
       "run_at": "document_idle"
     }
   ]

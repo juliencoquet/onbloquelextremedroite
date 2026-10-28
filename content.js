@@ -5,7 +5,7 @@ let running = false;
 let stopRequested = false;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const jitter = () => 1500 + Math.random() * 2500;
+const defaultDelay = () => 1500 + Math.random() * 2500;
 
 async function getState() {
   return (await chrome.storage.local.get(STATE_KEY))[STATE_KEY] || null;
@@ -17,7 +17,9 @@ async function run() {
   running = true;
   stopRequested = false;
 
-  const platform = globalThis.__blockPlatforms.x;
+  const platform = /instagram\.com$/.test(location.hostname)
+    ? globalThis.__blockPlatforms.instagram
+    : globalThis.__blockPlatforms.x;
   let st = await getState();
   if (!st) return (running = false);
 
@@ -53,7 +55,7 @@ async function run() {
     st.queue.shift();
     (r.ok ? st.done : st.failed).push(handle);
     await setState(st);
-    await sleep(jitter());
+    await sleep((platform.delay || defaultDelay)());
   }
 
   if (st.status === "running") {

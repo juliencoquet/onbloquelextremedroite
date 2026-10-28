@@ -10,15 +10,15 @@ function parseList(text) {
   }
   const seen = new Set();
   for (const raw of items) {
-    const h = String(raw).replace(/#.*/, "").trim().replace(/^@/, "").replace(/^https?:\/\/(x|twitter)\.com\//, "");
-    if (/^\w{1,15}$/.test(h)) seen.add(h);
+    const h = String(raw).replace(/#.*/, "").trim().replace(/^@/, "").replace(/^https?:\/\/(www\.)?(x|twitter|instagram)\.com\//, "").replace(/\/$/, "");
+    if (/^[\w.]{1,30}$/.test(h)) seen.add(h);
   }
   return [...seen];
 }
 
 async function activeXTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  return tab && /^https:\/\/(x|twitter)\.com\//.test(tab.url || "") ? tab : null;
+  return tab && /^https:\/\/(www\.)?(x|twitter|instagram)\.com\//.test(tab.url || "") ? tab : null;
 }
 
 function render(st) {
@@ -30,7 +30,7 @@ function render(st) {
 
 $("start").onclick = async () => {
   const tab = await activeXTab();
-  if (!tab) return ($("status").textContent = "Ouvrez un onglet x.com d'abord.");
+  if (!tab) return ($("status").textContent = "Ouvrez un onglet x.com ou instagram.com d'abord.");
 
   let text = $("paste").value;
   if ($("url").value.trim()) {
