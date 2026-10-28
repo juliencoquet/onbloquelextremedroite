@@ -2,10 +2,9 @@
   "manifest_version": 3,
   "name": "On bloque l'extrême droite",
   "version": "0.1.0",
-  "description": "Bloquez l'extrême droite sur les réseaux sociaux. Vous pouvez soit bloquer le profil en cours de visualisation, saisir une liste de pseudos, importer une liste de pseudos.",
+  "description": "Bloquez l'extrême droite sur X et Instagram : le profil affiché, ou une liste de pseudos saisie ou importée.",
   "permissions": [
-    "storage",
-    "activeTab"
+    "storage"
   ],
   "host_permissions": [
     "https://x.com/*",
