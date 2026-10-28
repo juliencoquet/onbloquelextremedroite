@@ -8,6 +8,8 @@ Chrome MV3 extension: imports a list of handles (URL or pasted) and blocks them 
 - `content.js` — queue runner in the page. Rate-limits (1.5–4 s jitter), pauses on 429, stops on 401/403, mirrors state to `chrome.storage.local` under `state`.
 - `popup.html` / `popup.js` — list parsing (text or JSON), start/stop, progress display.
 
+- `examples/liste.json` — shared handle list (grouped by network). Copied as `liste.json` into the release zip; the popup's URL placeholder points to its raw GitHub URL.
+
 ## Conventions
 - Plain JS, no bundler, no frameworks. Keep it small.
 - Network calls to the platform must run in the content script (same-origin, session cookies); the service worker/popup origin gets rejected.

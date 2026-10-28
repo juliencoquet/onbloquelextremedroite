@@ -11,6 +11,7 @@ Bloquez en quelques clics des comptes d'extrême droite sur X et Instagram, depu
 
 • « Bloquer ce profil » : bloque le profil affiché dans l'onglet.
 • Liste : saisissez ou collez des pseudos, ou importez une liste depuis une adresse (texte ou JSON, groupée par réseau).
+• Une liste commune de pseudos est proposée (liste.json, dans le dépôt GitHub du projet).
 • Le réseau est détecté automatiquement ; seules les entrées du réseau ouvert sont utilisées.
 • Rythme volontairement lent, arrêt automatique si le réseau demande de ralentir, bouton Stop pour tout annuler.
 
