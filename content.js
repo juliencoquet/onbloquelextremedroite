@@ -33,7 +33,18 @@ async function run() {
     try {
       r = await platform.block(handle);
     } catch (e) {
-      r = { ok: false, status: 0, retryAfterMs: 30_000 };
+      console.error("[onbloque] block failed for", handle, e);
+      st.errors = (st.errors || 0) + 1;
+      if (st.errors >= 3) {
+        // Give up on this handle instead of retrying forever.
+        st.errors = 0;
+        r = { ok: false, status: 0, error: String(e) };
+        st.message = "Erreur réseau sur @" + handle + " : " + e;
+      } else {
+        st.message = "Erreur (" + e + "), nouvel essai…";
+        r = { ok: false, status: 0, retryAfterMs: 10_000 };
+      }
+      await setState(st);
     }
 
     if (r.fatal) {
@@ -43,15 +54,17 @@ async function run() {
     }
     if (r.retryAfterMs) {
       st.status = "waiting";
-      st.message = "Limite atteinte, reprise dans " + Math.round(r.retryAfterMs / 60000) + " min.";
+      if (r.status === 429) {
+        st.message = "Limite atteinte, reprise dans " + Math.round(r.retryAfterMs / 60000) + " min.";
+      }
       await setState(st);
       await sleep(r.retryAfterMs);
       if (stopRequested) break;
       st.status = "running";
-      st.message = "";
       continue; // retry same handle
     }
 
+    st.errors = 0;
     st.queue.shift();
     (r.ok ? st.done : st.failed).push(handle);
     await setState(st);

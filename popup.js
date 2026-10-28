@@ -16,6 +16,16 @@ function parseList(text) {
   return [...seen];
 }
 
+const NETWORKS = { "instagram.com": "Instagram", "x.com": "X", "twitter.com": "X" };
+
+function networkOf(url) {
+  try {
+    return NETWORKS[new URL(url).hostname.replace(/^www\./, "")] || null;
+  } catch {
+    return null;
+  }
+}
+
 async function activeXTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab && /^https:\/\/(www\.)?(x|twitter|instagram)\.com\//.test(tab.url || "") ? tab : null;
@@ -25,12 +35,13 @@ function render(st) {
   if (!st) return ($("status").textContent = "");
   $("status").textContent =
     `État : ${st.status}\nBloqués : ${st.done.length} · Échecs : ${st.failed.length} · Restants : ${st.queue.length}` +
+    (st.queue.length && st.status === "running" ? `\nEn cours : @${st.queue[0]}` : "") +
     (st.message ? `\n${st.message}` : "");
 }
 
 $("start").onclick = async () => {
   const tab = await activeXTab();
-  if (!tab) return ($("status").textContent = "Ouvrez un onglet x.com ou instagram.com d'abord.");
+  if (!tab) return ($("status").textContent = "Ouvrez un réseau social compatible dans l'onglet actif.");
 
   let text = $("paste").value;
   if ($("url").value.trim()) {
@@ -47,13 +58,28 @@ $("start").onclick = async () => {
 
   const st = { status: "running", queue, done: prev ? prev.done : [], failed: [], message: "" };
   await chrome.storage.local.set({ state: st });
-  chrome.tabs.sendMessage(tab.id, { type: "start" });
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "start" });
+  } catch {
+    // Tab was opened before the extension was loaded/updated: no content script in it.
+    st.status = "error";
+    st.message = "Script absent de cet onglet : rechargez la page (F5) puis relancez.";
+    await chrome.storage.local.set({ state: st });
+  }
 };
 
 $("stop").onclick = async () => {
   const tab = await activeXTab();
   if (tab) chrome.tabs.sendMessage(tab.id, { type: "stop" });
 };
+
+(async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const net = tab && networkOf(tab.url);
+  $("hint").textContent = net
+    ? `Réseau détecté : ${net}. \rLes blocages sont faits depuis votre compte connecté, lentement, pour éviter les limites.`
+    : "\rOuvrez un réseau social compatible, connecté à votre compte, puis lancez.";
+})();
 
 chrome.storage.onChanged.addListener((c) => c.state && render(c.state.newValue));
 chrome.storage.local.get("state").then((r) => render(r.state));

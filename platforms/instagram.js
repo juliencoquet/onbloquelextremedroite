@@ -16,6 +16,10 @@
     "x-asbd-id": "129477",
   });
 
+  // fetch with a timeout so a stalled request can't freeze the queue.
+  const tfetch = (url, opts) =>
+    fetch(url, { ...opts, signal: AbortSignal.timeout(20_000) });
+
   async function block(handle) {
     const token = cookie("csrftoken");
     if (!token || !cookie("ds_user_id")) {
@@ -23,7 +27,7 @@
     }
 
     // 1. username -> numeric id
-    const info = await fetch(
+    const info = await tfetch(
       "https://www.instagram.com/api/v1/users/web_profile_info/?username=" + encodeURIComponent(handle),
       { credentials: "include", headers: headers(token) }
     );
@@ -41,7 +45,7 @@
     if (id === cookie("ds_user_id")) return { ok: false, status: 400 }; // never block self
 
     // 2. block
-    const res = await fetch("https://www.instagram.com/api/v1/web/friendships/" + id + "/block/", {
+    const res = await tfetch("https://www.instagram.com/api/v1/web/friendships/" + id + "/block/", {
       method: "POST",
       credentials: "include",
       headers: { ...headers(token), "content-type": "application/x-www-form-urlencoded" },

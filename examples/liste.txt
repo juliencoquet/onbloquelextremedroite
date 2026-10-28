@@ -1,0 +1,4 @@
+# un pseudo par ligne, @ et URL de profil acceptés
+compte_exemple_1
+@compte_exemple_2
+https://www.instagram.com/compte_exemple_3/
