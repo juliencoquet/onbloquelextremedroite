@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { font: 13px system-ui, sans-serif; width: 320px; margin: 12px; }
+  textarea, input { width: 100%; box-sizing: border-box; margin: 4px 0 8px; font: inherit; }
+  textarea { height: 90px; }
+  button { padding: 6px 10px; margin-right: 6px; }
+  #status { margin-top: 10px; white-space: pre-line; }
+  small { color: #666; }
+</style>
+<label>URL de la liste (texte ou JSON)</label>
+<input id="url" placeholder="https://raw.githubusercontent.com/.../liste.txt">
+<label>ou collez des pseudos</label>
+<textarea id="paste" placeholder="@pseudo1&#10;pseudo2&#10;# commentaire"></textarea>
+<button id="start">Bloquer</button><button id="stop">Stop</button>
+<div id="status"></div>
+<small>Ouvrez x.com connecté, puis lancez. Les blocages sont faits depuis votre compte, lentement, pour éviter les limites.</small>
+<script src="popup.js"></script>
