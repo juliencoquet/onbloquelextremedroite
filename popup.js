@@ -14,7 +14,13 @@ function parseList(text, network) {
   }
   const out = [];
   for (const raw of items) {
-    const h = String(raw).replace(/#.*/, "").trim().replace(/^@/, "").replace(/^https?:\/\/(www\.)?(x|twitter|instagram)\.com\//, "").replace(/\/$/, "");
+    let h = String(raw).replace(/#.*/, "").trim().replace(/^@/, "");
+    const url = h.match(/^https?:\/\/(?:www\.)?([^/]+)\/(.*)$/);
+    if (url) {
+      // A profile URL from another network is not an entry for this one.
+      if (NETWORKS[url[1]] !== network) continue;
+      h = url[2].replace(/\/$/, "");
+    }
     if (HANDLE_RE[network].test(h)) out.push(h);
   }
   return out;
@@ -58,18 +64,24 @@ $("start").onclick = async () => {
     }
   }
   const prev = (await chrome.storage.local.get("state")).state;
-  const prevDone = prev && prev.network === network ? prev.done : [];
+  // Only resume (skip handles already blocked) when an unfinished run (non-empty queue) exists on this network.
+  // A finished run is forgotten: blocked state lives on the platform, not here, so unblocking
+  // someone and re-running must block them again.
+  const resuming = prev && prev.network === network && prev.queue.length > 0;
+  const prevDone = resuming ? prev.done : [];
   const skip = new Set(prevDone);
-  const queue = [...new Set(sources.flatMap((t) => parseList(t, network)))].filter((h) => !skip.has(h));
-  if (!queue.length) return ($("status").textContent = `Aucun pseudo ${LABELS[network]} valide (ou déjà tous bloqués).`);
+  const parsed = [...new Set(sources.flatMap((t) => parseList(t, network)))];
+  const queue = parsed.filter((h) => !skip.has(h));
+  if (!parsed.length) return ($("status").textContent = `Aucun pseudo ${LABELS[network]} valide dans cette liste.`);
+  if (!queue.length) return ($("status").textContent = "Tous les comptes de cette liste ont déjà été bloqués lors de cette session.");
 
-  const st = { status: "running", network, queue, done: prevDone, failed: [], message: "" };
+  const st = { status: "En cours", network, queue, done: prevDone, failed: [], message: "" };
   await chrome.storage.local.set({ state: st });
   try {
     await chrome.tabs.sendMessage(tab.id, { type: "start" });
   } catch {
     // Tab was opened before the extension was loaded/updated: no content script in it.
-    st.status = "error";
+    st.status = "Erreur";
     st.message = "Script absent de cet onglet : rechargez la page (F5) puis relancez.";
     await chrome.storage.local.set({ state: st });
   }

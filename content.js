@@ -44,7 +44,7 @@ async function run() {
   let st = await getState();
   if (!st) return (running = false);
 
-  st.status = "running";
+  st.status = "En cours";
   st.message = "";
   await setState(st);
 
@@ -81,7 +81,7 @@ async function run() {
       await setState(st);
       await sleep(r.retryAfterMs);
       if (stopRequested) break;
-      st.status = "running";
+      st.status = "En cours";
       continue; // retry same handle
     }
 
@@ -92,7 +92,7 @@ async function run() {
     await sleep((platform.delay || defaultDelay)());
   }
 
-  if (st.status === "running") {
+  if (st.status === "En cours") {
     st.status = stopRequested ? "Arrêté" : "Terminé";
   }
   await setState(st);
