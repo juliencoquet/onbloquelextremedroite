@@ -45,8 +45,12 @@ async function activeXTab() {
 function render(st) {
   if (!st) return ($("status").textContent = "");
   $("status").textContent =
-    `État : ${st.status}\nBloqués : ${st.done.length} · Déjà bloqués : ${(st.already || []).length} · Échecs : ${st.failed.length} · Restants : ${st.queue.length}` +
-    (st.queue.length && st.status === "running" ? `\nEn cours : @${st.queue[0]}` : "") +
+    `État : ${st.status}\n` +
+    `Bloqués : ${st.done.length}\n` +
+    `Déjà bloqués : ${(st.already || []).length}\n` +
+    `Échecs : ${st.failed.length}\n` +
+    `Restants : ${st.queue.length}` +
+    (st.queue.length && st.status === "En cours" ? `\nEn cours : @${st.queue[0]}` : "") +
     (st.message ? `\n${st.message}` : "");
 }
 
@@ -99,9 +103,18 @@ $("current").onclick = async () => {
   }
 };
 
+// Stop cancels everything: the running loop (if the tab has one) and the saved state.
 $("stop").onclick = async () => {
   const tab = await activeXTab();
-  if (tab) chrome.tabs.sendMessage(tab.id, { type: "stop" });
+  if (tab) {
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: "stop" });
+    } catch {
+      // No content script in this tab: nothing running here, just clear the state below.
+    }
+  }
+  await chrome.storage.local.remove("state");
+  $("status").textContent = "";
 };
 
 (async () => {

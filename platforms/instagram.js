@@ -28,7 +28,7 @@
 
   async function waitFor(fn, timeout = 10_000) {
     const end = Date.now() + timeout;
-    while (Date.now() < end) {
+    while (Date.now() < end && !globalThis.__onbloqueCancel) {
       const v = fn();
       if (v) return v;
       await sleep(250);

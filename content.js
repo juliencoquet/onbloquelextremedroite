@@ -6,6 +6,18 @@ let running = false;
 let stopRequested = false;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Sleep that ends early on Stop (rate-limit waits can last many minutes).
+async function sleepUnlessStopped(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end && !stopRequested) await sleep(Math.min(250, end - Date.now()));
+}
+// Stop = cancel everything: end the loop, drop the saved state, and tell the adapter to bail out.
+function cancel() {
+  stopRequested = true;
+  globalThis.__onbloqueCancel = true;
+  sessionStorage.removeItem(RESUME_KEY);
+  return chrome.storage.local.remove(STATE_KEY);
+}
 const defaultDelay = () => 1500 + Math.random() * 2500;
 
 async function getState() {
@@ -38,17 +50,23 @@ async function blockCurrent() {
 }
 
 async function run() {
-  if (running) return;
+  if (running) {
+    if (!stopRequested) return;
+    while (running) await sleep(100); // let a cancelled loop unwind before starting anew
+  }
   running = true;
   stopRequested = false;
+  globalThis.__onbloqueCancel = false;
 
   const platform = currentPlatform();
   let st = await getState();
   if (!st) return (running = false);
 
+  const save = () => (stopRequested ? Promise.resolve() : setState(st));
+
   st.status = "En cours";
   st.message = "";
-  await setState(st);
+  await save();
 
   while (st.queue.length && !stopRequested) {
     const handle = st.queue[0];
@@ -67,14 +85,16 @@ async function run() {
         st.message = "Erreur (" + e + "), nouvel essai…";
         r = { ok: false, status: 0, retryAfterMs: 10_000 };
       }
-      await setState(st);
+      await save();
     }
+
+    if (stopRequested) break;
 
     if (r.navigate) {
       // Adapter needs another page (Instagram profile). Persist, load it; the content script
       // there picks the run back up (see bottom of file).
       sessionStorage.setItem(RESUME_KEY, "1");
-      await setState(st);
+      await save();
       location.assign(r.navigate);
       return;
     }
@@ -88,8 +108,8 @@ async function run() {
       if (r.status === 429) {
         st.message = "Limite atteinte, reprise dans " + Math.round(r.retryAfterMs / 60000) + " min.";
       }
-      await setState(st);
-      await sleep(r.retryAfterMs);
+      await save();
+      await sleepUnlessStopped(r.retryAfterMs);
       if (stopRequested) break;
       st.status = "En cours";
       continue; // retry same handle
@@ -104,14 +124,17 @@ async function run() {
       (r.ok ? st.done : st.failed).push(handle);
       st.message = "";
     }
-    await setState(st);
-    await sleep((platform.delay || defaultDelay)());
+    await save();
+    await sleepUnlessStopped((platform.delay || defaultDelay)());
   }
 
-  if (st.status === "En cours") {
-    st.status = stopRequested ? "Arrêté" : "Terminé";
+  if (stopRequested) {
+    // Cancelled: leave nothing behind.
+    await chrome.storage.local.remove(STATE_KEY);
+  } else {
+    if (st.status === "En cours") st.status = "Terminé";
+    await setState(st);
   }
-  await setState(st);
   sessionStorage.removeItem(RESUME_KEY);
   running = false;
 }
@@ -124,8 +147,8 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
     blockCurrent().then(reply);
     return true; // async reply
   } else if (msg.type === "stop") {
-    stopRequested = true;
-    reply({ ok: true });
+    cancel().then(() => reply({ ok: true }));
+    return true; // async reply
   }
 });
 
